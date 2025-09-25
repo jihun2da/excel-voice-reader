@@ -9,6 +9,7 @@ import io
 import base64
 from datetime import datetime
 import re
+import pandas as pd
 
 # 페이지 설정
 st.set_page_config(
@@ -77,6 +78,14 @@ if 'reading' not in st.session_state:
     st.session_state.reading = False
 if 'prev_g_value' not in st.session_state:
     st.session_state.prev_g_value = None
+if 'tts_engine' not in st.session_state:
+    st.session_state.tts_engine = 'Edge TTS (고품질)'
+if 'selected_voice' not in st.session_state:
+    st.session_state.selected_voice = 'ko-KR-SunHiNeural'
+if 'speed' not in st.session_state:
+    st.session_state.speed = '3'
+if 'announce_group' not in st.session_state:
+    st.session_state.announce_group = True
 
 # 메인 헤더
 st.title("🎵 엑셀 음성 리더 - 웹버전")
@@ -90,16 +99,18 @@ with st.sidebar:
     tts_engine = st.selectbox(
         "TTS 엔진",
         ["Edge TTS (고품질)", "브라우저 TTS (빠름)"],
-        help="Edge TTS는 고품질이지만 느리고, 브라우저 TTS는 빠르지만 품질이 낮습니다."
+        help="Edge TTS는 고품질이지만 느리고, 브라우저 TTS는 빠르지만 품질이 낮습니다.",
+        key="tts_engine_select"
     )
+    st.session_state.tts_engine = tts_engine
     
     # 음성 선택
     if tts_engine == "Edge TTS (고품질)":
         voice_options = {voice['name']: voice['id'] for voice in EDGE_VOICES}
         selected_voice_name = st.selectbox("음성 선택", list(voice_options.keys()))
-        selected_voice = voice_options[selected_voice_name]
+        st.session_state.selected_voice = voice_options[selected_voice_name]
     else:
-        selected_voice = None
+        st.session_state.selected_voice = None
         st.info("브라우저 TTS는 브라우저에서 제공하는 음성을 사용합니다.")
     
     # 속도 설정
@@ -110,8 +121,10 @@ with st.sidebar:
         format_func=lambda x: {
             "1": "매우 느림", "2": "느림", "3": "보통", 
             "4": "빠름", "5": "매우 빠름"
-        }[x]
+        }[x],
+        key="speed_select"
     )
+    st.session_state.speed = speed
     
     # 시작 행 설정
     start_row = st.number_input("시작 행", min_value=2, value=2, step=1)
@@ -120,6 +133,7 @@ with st.sidebar:
     st.subheader("📋 옵션")
     auto_advance = st.checkbox("자동 진행", help="자동으로 다음 행으로 이동합니다.")
     announce_group = st.checkbox("브랜드/묶음 변화 알림", value=True, help="G열 값이 바뀔 때 알림합니다.")
+    st.session_state.announce_group = announce_group
     
     if auto_advance:
         auto_interval = st.slider("자동 진행 간격 (초)", 0.1, 5.0, 0.3, 0.1)
@@ -256,6 +270,70 @@ with col2:
             else:
                 st.warning("검색할 내용이 없습니다.")
 
+# 엑셀 데이터 미리보기
+if st.session_state.file_data:
+    st.subheader("📋 엑셀 데이터 미리보기")
+    
+    # 데이터프레임 생성
+    df_data = []
+    for item in st.session_state.file_data['data']:
+        df_data.append({
+            '행': item['row'],
+            'G열(브랜드)': item['g'],
+            'H열': item['h'],
+            'I열(상품명)': item['i'],
+            'J열(색상)': item['j'],
+            'K열(사이즈)': item['k'],
+            'L열(수량)': item['l']
+        })
+    
+    df = pd.DataFrame(df_data)
+    
+    # 현재 행 하이라이트
+    if st.session_state.current_row <= len(df):
+        current_idx = st.session_state.current_row - 2
+        st.dataframe(
+            df,
+            use_container_width=True,
+            height=400,
+            hide_index=True
+        )
+        
+        # 현재 행으로 스크롤
+        st.markdown(f"**현재 선택된 행: {st.session_state.current_row}**")
+
+# 키보드 단축키 처리
+def handle_keyboard_shortcuts():
+    # JavaScript를 사용한 키보드 이벤트 처리
+    st.markdown("""
+    <script>
+    document.addEventListener('keydown', function(event) {
+        if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+            return;
+        }
+        
+        switch(event.key) {
+            case '1':
+            case ' ':
+                event.preventDefault();
+                // 다음 행으로 이동
+                window.parent.postMessage({type: 'next_row'}, '*');
+                break;
+            case '2':
+                event.preventDefault();
+                // 현재 행 다시 읽기
+                window.parent.postMessage({type: 'reread_row'}, '*');
+                break;
+            case '3':
+                event.preventDefault();
+                // 네이버 검색
+                window.parent.postMessage({type: 'search_naver'}, '*');
+                break;
+        }
+    });
+    </script>
+    """, unsafe_allow_html=True)
+
 # 현재 행 읽기 함수
 def read_current_row():
     if not st.session_state.file_data:
@@ -268,7 +346,7 @@ def read_current_row():
     
     # G열 (브랜드/묶음) 처리
     g_value = clean_g_value(current_data['g'])
-    if announce_group and g_value and g_value != st.session_state.prev_g_value:
+    if st.session_state.announce_group and g_value and g_value != st.session_state.prev_g_value:
         # 연속된 G값 개수 계산 (간단화)
         g_count = 1
         for i in range(st.session_state.current_row, st.session_state.file_data['max_row'] + 1):
@@ -303,9 +381,10 @@ def read_current_row():
         st.info(f"🔊 읽을 내용: {combined_text}")
         
         # Edge TTS 사용
-        if tts_engine == "Edge TTS (고품질)":
+        if st.session_state.tts_engine == "Edge TTS (고품질)":
             try:
-                rate = EDGE_RATE_MAP.get(speed, "+0%")
+                rate = EDGE_RATE_MAP.get(st.session_state.speed, "+0%")
+                selected_voice = st.session_state.selected_voice
                 
                 # Edge TTS로 음성 생성
                 with st.spinner("음성을 생성하고 있습니다..."):
@@ -342,7 +421,7 @@ if st.session_state.reading and auto_advance:
         st.session_state.reading = False
         st.success("모든 행을 읽었습니다!")
 
-# 푸터
+# 키보드 단축키 안내
 st.markdown("---")
 st.markdown("### ⌨️ 키보드 단축키")
 st.markdown("""
@@ -358,3 +437,6 @@ st.markdown("""
 3. **읽기 시작**: '시작' 버튼을 클릭하거나 '현재 행 읽기'를 사용하세요
 4. **자동 진행**: 필요시 자동 진행을 활성화하세요
 """)
+
+# 키보드 단축키 처리 함수 호출
+handle_keyboard_shortcuts()
