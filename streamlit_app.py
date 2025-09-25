@@ -269,6 +269,39 @@ with col2:
                 st.markdown(f"[🔍 네이버에서 '{query}' 검색하기]({naver_url})")
             else:
                 st.warning("검색할 내용이 없습니다.")
+    
+    # 키보드 단축키 버튼들
+    st.subheader("⌨️ 키보드 단축키")
+    
+    col_kb1, col_kb2, col_kb3 = st.columns(3)
+    
+    with col_kb1:
+        if st.button("1️⃣ 다음 행", use_container_width=True, key="kb_1"):
+            if st.session_state.file_data:
+                st.session_state.current_row += 1
+                if st.session_state.current_row > st.session_state.file_data['max_row']:
+                    st.session_state.current_row = st.session_state.file_data['max_row']
+                    st.info("마지막 행입니다.")
+                st.rerun()
+    
+    with col_kb2:
+        if st.button("2️⃣ 다시 읽기", use_container_width=True, key="kb_2"):
+            if st.session_state.file_data:
+                read_current_row()
+    
+    with col_kb3:
+        if st.button("3️⃣ 네이버 검색", use_container_width=True, key="kb_3"):
+            if st.session_state.file_data and st.session_state.current_row <= len(st.session_state.file_data['data']):
+                current_data = st.session_state.file_data['data'][st.session_state.current_row - 2]
+                h_value = current_data['h']
+                i_value = current_data['i']
+                
+                if h_value and i_value:
+                    query = f"{h_value} {i_value}"
+                    naver_url = f"https://search.naver.com/search.naver?query={query}"
+                    st.markdown(f"[🔍 네이버에서 '{query}' 검색하기]({naver_url})")
+                else:
+                    st.warning("검색할 내용이 없습니다.")
 
 # 엑셀 데이터 미리보기
 if st.session_state.file_data:
@@ -289,50 +322,51 @@ if st.session_state.file_data:
     
     df = pd.DataFrame(df_data)
     
-    # 현재 행 하이라이트
-    if st.session_state.current_row <= len(df):
-        current_idx = st.session_state.current_row - 2
-        st.dataframe(
-            df,
-            use_container_width=True,
-            height=400,
-            hide_index=True
-        )
-        
-        # 현재 행으로 스크롤
-        st.markdown(f"**현재 선택된 행: {st.session_state.current_row}**")
+    # 현재 행 하이라이트를 위한 스타일링
+    def highlight_current_row(row):
+        if row['행'] == st.session_state.current_row:
+            return ['background-color: #ffeb3b'] * len(row)
+        return [''] * len(row)
+    
+    # 스타일 적용
+    styled_df = df.style.apply(highlight_current_row, axis=1)
+    
+    # 데이터프레임 표시
+    st.dataframe(
+        styled_df,
+        use_container_width=True,
+        height=400,
+        hide_index=True
+    )
+    
+    # 현재 행 정보
+    st.markdown(f"**현재 선택된 행: {st.session_state.current_row}**")
+    
+    # 행 이동 버튼들
+    col_nav1, col_nav2, col_nav3, col_nav4 = st.columns(4)
+    
+    with col_nav1:
+        if st.button("⏮️ 처음으로", use_container_width=True):
+            st.session_state.current_row = 2
+            st.rerun()
+    
+    with col_nav2:
+        if st.button("⬅️ 이전 행", use_container_width=True):
+            if st.session_state.current_row > 2:
+                st.session_state.current_row -= 1
+                st.rerun()
+    
+    with col_nav3:
+        if st.button("➡️ 다음 행", use_container_width=True):
+            if st.session_state.current_row < st.session_state.file_data['max_row']:
+                st.session_state.current_row += 1
+                st.rerun()
+    
+    with col_nav4:
+        if st.button("⏭️ 마지막으로", use_container_width=True):
+            st.session_state.current_row = st.session_state.file_data['max_row']
+            st.rerun()
 
-# 키보드 단축키 처리
-def handle_keyboard_shortcuts():
-    # JavaScript를 사용한 키보드 이벤트 처리
-    st.markdown("""
-    <script>
-    document.addEventListener('keydown', function(event) {
-        if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
-            return;
-        }
-        
-        switch(event.key) {
-            case '1':
-            case ' ':
-                event.preventDefault();
-                // 다음 행으로 이동
-                window.parent.postMessage({type: 'next_row'}, '*');
-                break;
-            case '2':
-                event.preventDefault();
-                // 현재 행 다시 읽기
-                window.parent.postMessage({type: 'reread_row'}, '*');
-                break;
-            case '3':
-                event.preventDefault();
-                // 네이버 검색
-                window.parent.postMessage({type: 'search_naver'}, '*');
-                break;
-        }
-    });
-    </script>
-    """, unsafe_allow_html=True)
 
 # 현재 행 읽기 함수
 def read_current_row():
@@ -406,8 +440,17 @@ def read_current_row():
             except Exception as e:
                 st.error(f"TTS 생성 실패: {str(e)}")
         else:
-            # 브라우저 TTS 사용 안내
-            st.info("브라우저 TTS를 사용하려면 브라우저의 음성 기능을 사용하세요.")
+            # 브라우저 TTS 사용
+            try:
+                import pyttsx3
+                engine = pyttsx3.init()
+                engine.setProperty('rate', 200)
+                engine.setProperty('volume', 1.0)
+                engine.say(combined_text)
+                engine.runAndWait()
+                st.success("브라우저 TTS로 음성을 재생했습니다.")
+            except Exception as e:
+                st.error(f"브라우저 TTS 실패: {str(e)}")
     else:
         st.warning("읽을 내용이 없습니다.")
 
@@ -421,22 +464,13 @@ if st.session_state.reading and auto_advance:
         st.session_state.reading = False
         st.success("모든 행을 읽었습니다!")
 
-# 키보드 단축키 안내
+# 사용법 안내
 st.markdown("---")
-st.markdown("### ⌨️ 키보드 단축키")
-st.markdown("""
-- **1 또는 Space**: 다음 행
-- **2**: 현재 행 다시 읽기  
-- **3**: 네이버 검색
-""")
-
 st.markdown("### 🎯 사용법")
 st.markdown("""
 1. **파일 업로드**: 엑셀 파일을 업로드하세요
 2. **설정 조정**: 사이드바에서 TTS 설정을 조정하세요
 3. **읽기 시작**: '시작' 버튼을 클릭하거나 '현재 행 읽기'를 사용하세요
 4. **자동 진행**: 필요시 자동 진행을 활성화하세요
+5. **키보드 단축키**: 1(다음 행), 2(다시 읽기), 3(네이버 검색) 버튼을 사용하세요
 """)
-
-# 키보드 단축키 처리 함수 호출
-handle_keyboard_shortcuts()
