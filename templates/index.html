@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>엑셀 음성 리더 - 웹버전</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+            padding: 30px;
+        }
+
+        .left-panel {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+        }
+
+        .right-panel {
+            background: #fff;
+            border-radius: 10px;
+            padding: 25px;
+            border: 2px solid #e9ecef;
+        }
+
+        .file-upload {
+            margin-bottom: 25px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .file-input-label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .file-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: #e8f4fd;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .display-area {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px solid #e9ecef;
+            min-height: 100px;
+        }
+
+        .display-text {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .btn {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.4);
+        }
+
+        .settings-section {
+            margin-bottom: 25px;
+        }
+
+        .settings-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .shortcuts {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .shortcuts h4 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .shortcut-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .shortcut-key {
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .audio-controls {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .audio-controls button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .audio-controls button:hover {
+            background: #5a6fd8;
+        }
+
+        .audio-controls button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎵 엑셀 음성 리더</h1>
+            <p>웹 기반 고급 TTS 시스템</p>
+        </div>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="file-upload">
+                    <div class="file-input-wrapper">
+                        <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls">
+                        <label for="fileInput" class="file-input-label">
+                            📂 엑셀 파일 선택
+                        </label>
+                    </div>
+                    <div id="fileInfo" class="file-info" style="display: none;">
+                        <div id="fileName"></div>
+                        <div id="fileStats"></div>
+                    </div>
+                </div>
+
+                <div class="display-area">
+                    <div class="display-text" id="displayText">>> 파일을 업로드하고 시작하세요 <<</div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn btn-primary" id="startBtn" onclick="startReading()">▶ 시작</button>
+                    <button class="btn btn-danger" id="stopBtn" onclick="stopReading()">⏹ 중지</button>
+                    <button class="btn btn-secondary" id="nextBtn" onclick="nextRow()">다음 행</button>
+                    <button class="btn btn-secondary" id="rereadBtn" onclick="rereadRow()">다시 읽기</button>
+                </div>
+
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+
+                <div class="audio-controls">
+                    <button id="playBtn" onclick="playAudio()" disabled>🔊 재생</button>
+                    <button id="pauseBtn" onclick="pauseAudio()" disabled>⏸ 일시정지</button>
+                    <button id="stopBtn" onclick="stopAudio()" disabled>⏹ 정지</button>
+                </div>
+
+                <div id="status" class="status" style="display: none;"></div>
+                <div id="loading" class="loading">
+                    <div class="spinner"></div>
+                    <div>음성을 생성하고 있습니다...</div>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="settings-section">
+                    <h3>🎛️ TTS 설정</h3>
+                    
+                    <div class="form-group">
+                        <label for="engineSelect">TTS 엔진</label>
+                        <select id="engineSelect" class="form-control" onchange="updateVoiceOptions()">
+                            <option value="edge-tts">Edge TTS (고품질)</option>
+                            <option value="browser-tts">브라우저 TTS (빠름)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="voiceSelect">음성 선택</label>
+                        <select id="voiceSelect" class="form-control">
+                            <option value="ko-KR-SunHiNeural">한국어 - 선희 (여성)</option>
+                            <option value="ko-KR-InJoonNeural">한국어 - 인준 (남성)</option>
+                            <option value="en-US-AriaNeural">영어 - 아리아 (여성)</option>
+                            <option value="en-US-GuyNeural">영어 - 가이 (남성)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="speedSelect">속도</label>
+                        <select id="speedSelect" class="form-control">
+                            <option value="1">매우 느림</option>
+                            <option value="2">느림</option>
+                            <option value="3" selected>보통</option>
+                            <option value="4">빠름</option>
+                            <option value="5">매우 빠름</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="startRowInput">시작 행</label>
+                        <input type="number" id="startRowInput" class="form-control" value="2" min="2">
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>⚙️ 옵션</h3>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="autoAdvance" onchange="toggleAutoAdvance()">
+                            자동 진행
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="announceGroup" checked>
+                            브랜드/묶음 변화 알림
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="autoInterval">자동 진행 간격 (ms)</label>
+                        <input type="number" id="autoInterval" class="form-control" value="300" min="100" max="5000">
+                    </div>
+                </div>
+
+                <div class="shortcuts">
+                    <h4>⌨️ 단축키</h4>
+                    <div class="shortcut-item">
+                        <span>다음 행</span>
+                        <span class="shortcut-key">1</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <span>다시 읽기</span>
+                        <span class="shortcut-key">2</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <span>네이버 검색</span>
+                        <span class="shortcut-key">3</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <span>다음 행</span>
+                        <span class="shortcut-key">Space</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 전역 변수
+        let currentRow = 2;
+        let fileData = null;
+        let reading = false;
+        let autoAdvanceInterval = null;
+        let currentAudio = null;
+        let browserVoices = [];
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBrowserVoices();
+            setupEventListeners();
+        });
+
+        // 브라우저 음성 목록 로드
+        function loadBrowserVoices() {
+            if ('speechSynthesis' in window) {
+                const voices = speechSynthesis.getVoices();
+                browserVoices = voices;
+                updateVoiceOptions();
+            }
+        }
+
+        // 음성 옵션 업데이트
+        function updateVoiceOptions() {
+            const engine = document.getElementById('engineSelect').value;
+            const voiceSelect = document.getElementById('voiceSelect');
+            
+            voiceSelect.innerHTML = '';
+            
+            if (engine === 'browser-tts') {
+                browserVoices.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.voiceURI;
+                    option.textContent = `${voice.name} (${voice.lang})`;
+                    voiceSelect.appendChild(option);
+                });
+            } else {
+                // Edge TTS 음성들
+                const edgeVoices = [
+                    {id: 'ko-KR-SunHiNeural', name: '한국어 - 선희 (여성)'},
+                    {id: 'ko-KR-InJoonNeural', name: '한국어 - 인준 (남성)'},
+                    {id: 'en-US-AriaNeural', name: '영어 - 아리아 (여성)'},
+                    {id: 'en-US-GuyNeural', name: '영어 - 가이 (남성)'},
+                    {id: 'ja-JP-NanamiNeural', name: '일본어 - 나나미 (여성)'},
+                    {id: 'zh-CN-XiaoxiaoNeural', name: '중국어 - 샤오샤오 (여성)'}
+                ];
+                
+                edgeVoices.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    option.textContent = voice.name;
+                    voiceSelect.appendChild(option);
+                });
+            }
+        }
+
+        // 이벤트 리스너 설정
+        function setupEventListeners() {
+            // 파일 업로드
+            document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+            
+            // 키보드 단축키
+            document.addEventListener('keydown', handleKeyPress);
+            
+            // 음성 엔진 변경
+            document.getElementById('engineSelect').addEventListener('change', updateVoiceOptions);
+        }
+
+        // 파일 업로드 처리
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            showLoading(true);
+            
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    fileData = result;
+                    showFileInfo(result.filename, result.total_rows);
+                    showStatus('파일이 성공적으로 업로드되었습니다.', 'success');
+                } else {
+                    showStatus(result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('파일 업로드 중 오류가 발생했습니다.', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // 파일 정보 표시
+        function showFileInfo(filename, totalRows) {
+            document.getElementById('fileName').textContent = `파일: ${filename}`;
+            document.getElementById('fileStats').textContent = `총 ${totalRows}개 행`;
+            document.getElementById('fileInfo').style.display = 'block';
+        }
+
+        // 읽기 시작
+        async function startReading() {
+            if (!fileData) {
+                showStatus('먼저 파일을 업로드하세요.', 'error');
+                return;
+            }
+
+            reading = true;
+            currentRow = parseInt(document.getElementById('startRowInput').value) || 2;
+            
+            showStatus('읽기를 시작합니다...', 'info');
+            await readCurrentRow();
+            
+            if (document.getElementById('autoAdvance').checked) {
+                startAutoAdvance();
+            }
+        }
+
+        // 읽기 중지
+        function stopReading() {
+            reading = false;
+            stopAutoAdvance();
+            stopAudio();
+            showStatus('읽기가 중지되었습니다.', 'info');
+        }
+
+        // 현재 행 읽기
+        async function readCurrentRow(forceRead = false) {
+            if (!fileData || !reading) return;
+
+            showLoading(true);
+            
+            const engine = document.getElementById('engineSelect').value;
+            const voice = document.getElementById('voiceSelect').value;
+            const speed = document.getElementById('speedSelect').value;
+
+            try {
+                const response = await fetch('/read_row', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        row: currentRow,
+                        engine: engine,
+                        voice: voice,
+                        speed: speed
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    updateDisplay(result.text, result.row_data);
+                    
+                    if (result.use_browser_tts) {
+                        speakWithBrowser(result.text);
+                    } else if (result.audio_url) {
+                        playAudioFromUrl(result.audio_url);
+                    }
+                    
+                    updateProgress();
+                } else {
+                    showStatus(result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('읽기 중 오류가 발생했습니다.', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // 브라우저 TTS로 읽기
+        function speakWithBrowser(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                const voice = document.getElementById('voiceSelect').value;
+                const speed = parseFloat(document.getElementById('speedSelect').value) / 3;
+                
+                utterance.voice = browserVoices.find(v => v.voiceURI === voice) || null;
+                utterance.rate = speed;
+                utterance.pitch = 1;
+                utterance.volume = 1;
+                
+                speechSynthesis.speak(utterance);
+                currentAudio = utterance;
+            }
+        }
+
+        // 오디오 URL로 재생
+        function playAudioFromUrl(url) {
+            if (currentAudio) {
+                currentAudio.pause();
+            }
+            
+            currentAudio = new Audio(url);
+            currentAudio.play();
+            
+            currentAudio.addEventListener('ended', () => {
+                document.getElementById('playBtn').disabled = false;
+                document.getElementById('pauseBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = true;
+            });
+        }
+
+        // 오디오 재생
+        function playAudio() {
+            if (currentAudio && currentAudio.paused) {
+                currentAudio.play();
+                document.getElementById('playBtn').disabled = true;
+                document.getElementById('pauseBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = false;
+            }
+        }
+
+        // 오디오 일시정지
+        function pauseAudio() {
+            if (currentAudio && !currentAudio.paused) {
+                currentAudio.pause();
+                document.getElementById('playBtn').disabled = false;
+                document.getElementById('pauseBtn').disabled = true;
+            }
+        }
+
+        // 오디오 정지
+        function stopAudio() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                document.getElementById('playBtn').disabled = false;
+                document.getElementById('pauseBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = true;
+            }
+        }
+
+        // 다음 행
+        function nextRow() {
+            if (!fileData || !reading) return;
+            
+            currentRow++;
+            if (currentRow > fileData.total_rows) {
+                showStatus('모든 행을 읽었습니다.', 'info');
+                stopReading();
+                return;
+            }
+            
+            readCurrentRow(true);
+        }
+
+        // 다시 읽기
+        function rereadRow() {
+            if (!fileData || !reading) return;
+            readCurrentRow(true);
+        }
+
+        // 자동 진행 시작
+        function startAutoAdvance() {
+            if (autoAdvanceInterval) {
+                clearInterval(autoAdvanceInterval);
+            }
+            
+            const interval = parseInt(document.getElementById('autoInterval').value) || 300;
+            autoAdvanceInterval = setInterval(() => {
+                if (reading) {
+                    nextRow();
+                }
+            }, interval);
+        }
+
+        // 자동 진행 중지
+        function stopAutoAdvance() {
+            if (autoAdvanceInterval) {
+                clearInterval(autoAdvanceInterval);
+                autoAdvanceInterval = null;
+            }
+        }
+
+        // 자동 진행 토글
+        function toggleAutoAdvance() {
+            if (document.getElementById('autoAdvance').checked && reading) {
+                startAutoAdvance();
+            } else {
+                stopAutoAdvance();
+            }
+        }
+
+        // 표시 업데이트
+        function updateDisplay(text, rowData) {
+            document.getElementById('displayText').textContent = 
+                `${currentRow} | ${rowData.i || ''} ${rowData.j || ''} ${rowData.k || ''} ${rowData.l || ''}`;
+        }
+
+        // 진행률 업데이트
+        function updateProgress() {
+            if (!fileData) return;
+            
+            const progress = (currentRow / fileData.total_rows) * 100;
+            document.getElementById('progressFill').style.width = `${progress}%`;
+        }
+
+        // 상태 표시
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        // 로딩 표시
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        // 키보드 단축키 처리
+        function handleKeyPress(event) {
+            if (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') {
+                return;
+            }
+            
+            switch(event.key) {
+                case '1':
+                case ' ':
+                    event.preventDefault();
+                    nextRow();
+                    break;
+                case '2':
+                    event.preventDefault();
+                    rereadRow();
+                    break;
+                case '3':
+                    event.preventDefault();
+                    searchNaver();
+                    break;
+            }
+        }
+
+        // 네이버 검색
+        async function searchNaver() {
+            if (!fileData) {
+                showStatus('먼저 파일을 업로드하세요.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/search_naver', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        row: currentRow
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    window.open(result.url, '_blank');
+                } else {
+                    showStatus(result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('검색 중 오류가 발생했습니다.', 'error');
+            }
+        }
+    </script>
+</body>
+</html>
