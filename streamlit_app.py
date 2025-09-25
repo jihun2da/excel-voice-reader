@@ -3,13 +3,12 @@ import openpyxl
 import tempfile
 import os
 import uuid
-import asyncio
-import edge_tts
 import io
-import base64
-from datetime import datetime
 import re
 import pandas as pd
+import pyttsx3
+import threading
+import time
 
 # 페이지 설정
 st.set_page_config(
@@ -44,30 +43,18 @@ def convert_quantity(n):
 def clean_g_value(text):
     return re.sub(r"\(.*?\)", "", text).strip()
 
-def count_consecutive_g_values(ws, start_row):
-    current_g = clean_g_value(str(ws.cell(row=start_row, column=7).value or ""))
-    count = 0
-    max_row = ws.max_row
-    for row in range(start_row, max_row + 1):
-        g_value = clean_g_value(str(ws.cell(row=row, column=7).value or ""))
-        if g_value == current_g:
-            count += 1
-        else:
-            break
-    return count
-
-# Edge TTS 음성 목록
-EDGE_VOICES = [
-    {'id': 'ko-KR-SunHiNeural', 'name': '한국어 - 선희 (여성)'},
-    {'id': 'ko-KR-InJoonNeural', 'name': '한국어 - 인준 (남성)'},
-    {'id': 'en-US-AriaNeural', 'name': '영어 - 아리아 (여성)'},
-    {'id': 'en-US-GuyNeural', 'name': '영어 - 가이 (남성)'},
-    {'id': 'ja-JP-NanamiNeural', 'name': '일본어 - 나나미 (여성)'},
-    {'id': 'zh-CN-XiaoxiaoNeural', 'name': '중국어 - 샤오샤오 (여성)'}
-]
-
-# Edge TTS 속도 매핑
-EDGE_RATE_MAP = {"1": "-25%", "2": "-15%", "3": "+0%", "4": "+15%", "5": "+25%"}
+# 간단한 TTS 함수
+def speak_text(text):
+    try:
+        engine = pyttsx3.init()
+        engine.setProperty('rate', 200)  # 속도
+        engine.setProperty('volume', 1.0)  # 볼륨
+        engine.say(text)
+        engine.runAndWait()
+        return True
+    except Exception as e:
+        st.error(f"음성 재생 실패: {str(e)}")
+        return False
 
 # 세션 상태 초기화
 if 'file_data' not in st.session_state:
@@ -78,56 +65,25 @@ if 'reading' not in st.session_state:
     st.session_state.reading = False
 if 'prev_g_value' not in st.session_state:
     st.session_state.prev_g_value = None
-if 'tts_engine' not in st.session_state:
-    st.session_state.tts_engine = 'Edge TTS (고품질)'
-if 'selected_voice' not in st.session_state:
-    st.session_state.selected_voice = 'ko-KR-SunHiNeural'
-if 'speed' not in st.session_state:
-    st.session_state.speed = '3'
-if 'announce_group' not in st.session_state:
-    st.session_state.announce_group = True
 
 # 메인 헤더
 st.title("🎵 엑셀 음성 리더 - 웹버전")
-st.markdown("**고급 TTS 시스템으로 엑셀 데이터를 음성으로 변환하세요**")
+st.markdown("**간단하고 안정적인 TTS 시스템**")
 
 # 사이드바 설정
 with st.sidebar:
     st.header("⚙️ 설정")
     
-    # TTS 엔진 선택
-    tts_engine = st.selectbox(
-        "TTS 엔진",
-        ["브라우저 TTS (권장)", "Edge TTS (고품질)", "웹 TTS (온라인)"],
-        help="브라우저 TTS가 가장 안정적입니다. Edge TTS는 서버 문제로 실패할 수 있습니다.",
-        key="tts_engine_select"
-    )
-    st.session_state.tts_engine = tts_engine
-    
-    # 음성 선택
-    if tts_engine == "Edge TTS (고품질)":
-        voice_options = {voice['name']: voice['id'] for voice in EDGE_VOICES}
-        selected_voice_name = st.selectbox("음성 선택", list(voice_options.keys()))
-        st.session_state.selected_voice = voice_options[selected_voice_name]
-    elif tts_engine == "웹 TTS (온라인)":
-        st.session_state.selected_voice = None
-        st.info("웹 TTS는 온라인 서비스를 사용합니다.")
-    else:
-        st.session_state.selected_voice = None
-        st.info("브라우저 TTS는 브라우저에서 제공하는 음성을 사용합니다.")
-    
     # 속도 설정
     speed = st.selectbox(
-        "속도",
+        "음성 속도",
         ["1", "2", "3", "4", "5"],
         index=2,
         format_func=lambda x: {
             "1": "매우 느림", "2": "느림", "3": "보통", 
             "4": "빠름", "5": "매우 빠름"
-        }[x],
-        key="speed_select"
+        }[x]
     )
-    st.session_state.speed = speed
     
     # 시작 행 설정
     start_row = st.number_input("시작 행", min_value=2, value=2, step=1)
@@ -136,7 +92,6 @@ with st.sidebar:
     st.subheader("📋 옵션")
     auto_advance = st.checkbox("자동 진행", help="자동으로 다음 행으로 이동합니다.")
     announce_group = st.checkbox("브랜드/묶음 변화 알림", value=True, help="G열 값이 바뀔 때 알림합니다.")
-    st.session_state.announce_group = announce_group
     
     if auto_advance:
         auto_interval = st.slider("자동 진행 간격 (초)", 0.1, 5.0, 0.3, 0.1)
@@ -240,7 +195,7 @@ with col2:
     # 단일 행 읽기
     if st.button("🔊 현재 행 읽기", use_container_width=True):
         if st.session_state.file_data and st.session_state.current_row <= len(st.session_state.file_data['data']):
-            # 현재 행 읽기 로직을 직접 구현
+            # 현재 행 읽기 로직
             current_data = st.session_state.file_data['data'][st.session_state.current_row - 2]
             
             # 읽을 텍스트 구성
@@ -248,22 +203,8 @@ with col2:
             
             # G열 (브랜드/묶음) 처리
             g_value = clean_g_value(current_data['g'])
-            if st.session_state.announce_group and g_value and g_value != st.session_state.prev_g_value:
-                # 연속된 G값 개수 계산 (간단화)
-                g_count = 1
-                for i in range(st.session_state.current_row, st.session_state.file_data['max_row'] + 1):
-                    if i < len(st.session_state.file_data['data']) + 1:
-                        next_data = st.session_state.file_data['data'][i - 2]
-                        next_g = clean_g_value(next_data['g'])
-                        if next_g == g_value:
-                            g_count += 1
-                        else:
-                            break
-                
-                if g_count > 1:
-                    text_parts.append(f"{g_value} {convert_quantity(g_count)}")
-                else:
-                    text_parts.append(g_value)
+            if announce_group and g_value and g_value != st.session_state.prev_g_value:
+                text_parts.append(g_value)
             
             st.session_state.prev_g_value = g_value
             
@@ -282,91 +223,13 @@ with col2:
             if combined_text.strip():
                 st.info(f"🔊 읽을 내용: {combined_text}")
                 
-                # TTS 엔진 선택
-                if st.session_state.tts_engine == "웹 TTS (온라인)":
-                    # 웹 TTS 사용 (Google Translate TTS)
-                    try:
-                        import requests
-                        import urllib.parse
-                        
-                        # Google Translate TTS API 사용
-                        text_encoded = urllib.parse.quote(combined_text)
-                        tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={text_encoded}&tl=ko&client=tw-ob"
-                        
-                        response = requests.get(tts_url)
-                        if response.status_code == 200:
-                            st.audio(response.content, format='audio/mpeg')
-                            st.success("웹 TTS로 음성을 재생했습니다.")
-                        else:
-                            st.error("웹 TTS 서비스에 접근할 수 없습니다.")
-                    except Exception as e:
-                        st.error(f"웹 TTS 실패: {str(e)}")
-                        st.info("브라우저 TTS로 자동 전환합니다...")
-                        
-                        # 웹 TTS 실패 시 브라우저 TTS로 폴백
-                        try:
-                            import pyttsx3
-                            engine = pyttsx3.init()
-                            engine.setProperty('rate', 200)
-                            engine.setProperty('volume', 1.0)
-                            engine.say(combined_text)
-                            engine.runAndWait()
-                            st.success("브라우저 TTS로 음성을 재생했습니다.")
-                        except Exception as e2:
-                            st.error(f"브라우저 TTS도 실패: {str(e2)}")
-                            st.info("텍스트를 복사하여 다른 TTS 도구를 사용하세요.")
-                elif st.session_state.tts_engine == "Edge TTS (고품질)":
-                    # Edge TTS 시도
-                    try:
-                        rate = EDGE_RATE_MAP.get(st.session_state.speed, "+0%")
-                        selected_voice = st.session_state.selected_voice
-                        
-                        # Edge TTS로 음성 생성
-                        with st.spinner("음성을 생성하고 있습니다..."):
-                            temp_audio = os.path.join(tempfile.gettempdir(), f"tts_{uuid.uuid4().hex}.mp3")
-                            comm = edge_tts.Communicate(combined_text, voice=selected_voice, rate=rate)
-                            asyncio.run(comm.save(temp_audio))
-                            
-                            # 오디오 파일 재생
-                            with open(temp_audio, 'rb') as audio_file:
-                                audio_bytes = audio_file.read()
-                                st.audio(audio_bytes, format='audio/mp3')
-                            
-                            # 임시 파일 삭제
-                            try:
-                                os.remove(temp_audio)
-                            except:
-                                pass
-                                
-                    except Exception as e:
-                        st.warning(f"Edge TTS 실패: {str(e)}")
-                        st.info("브라우저 TTS로 자동 전환합니다...")
-                        
-                        # Edge TTS 실패 시 브라우저 TTS로 폴백
-                        try:
-                            import pyttsx3
-                            engine = pyttsx3.init()
-                            engine.setProperty('rate', 200)
-                            engine.setProperty('volume', 1.0)
-                            engine.say(combined_text)
-                            engine.runAndWait()
-                            st.success("브라우저 TTS로 음성을 재생했습니다.")
-                        except Exception as e2:
-                            st.error(f"브라우저 TTS도 실패: {str(e2)}")
-                            st.info("텍스트를 복사하여 다른 TTS 도구를 사용하세요.")
-                else:
-                    # 브라우저 TTS 사용
-                    try:
-                        import pyttsx3
-                        engine = pyttsx3.init()
-                        engine.setProperty('rate', 200)
-                        engine.setProperty('volume', 1.0)
-                        engine.say(combined_text)
-                        engine.runAndWait()
-                        st.success("브라우저 TTS로 음성을 재생했습니다.")
-                    except Exception as e:
-                        st.error(f"브라우저 TTS 실패: {str(e)}")
-                        st.info("텍스트를 복사하여 다른 TTS 도구를 사용하세요.")
+                # TTS 실행
+                with st.spinner("음성을 재생하고 있습니다..."):
+                    success = speak_text(combined_text)
+                    if success:
+                        st.success("✅ 음성 재생 완료!")
+                    else:
+                        st.error("❌ 음성 재생 실패")
             else:
                 st.warning("읽을 내용이 없습니다.")
         else:
@@ -426,7 +289,7 @@ with col2:
     with col_kb2:
         if st.button("2️⃣ 다시 읽기", use_container_width=True, key="kb_2"):
             if st.session_state.file_data:
-                # 현재 행 읽기 로직을 직접 구현
+                # 현재 행 읽기 로직
                 current_data = st.session_state.file_data['data'][st.session_state.current_row - 2]
                 
                 # 읽을 텍스트 구성
@@ -434,22 +297,8 @@ with col2:
                 
                 # G열 (브랜드/묶음) 처리
                 g_value = clean_g_value(current_data['g'])
-                if st.session_state.announce_group and g_value and g_value != st.session_state.prev_g_value:
-                    # 연속된 G값 개수 계산 (간단화)
-                    g_count = 1
-                    for i in range(st.session_state.current_row, st.session_state.file_data['max_row'] + 1):
-                        if i < len(st.session_state.file_data['data']) + 1:
-                            next_data = st.session_state.file_data['data'][i - 2]
-                            next_g = clean_g_value(next_data['g'])
-                            if next_g == g_value:
-                                g_count += 1
-                            else:
-                                break
-                    
-                    if g_count > 1:
-                        text_parts.append(f"{g_value} {convert_quantity(g_count)}")
-                    else:
-                        text_parts.append(g_value)
+                if announce_group and g_value and g_value != st.session_state.prev_g_value:
+                    text_parts.append(g_value)
                 
                 st.session_state.prev_g_value = g_value
                 
@@ -468,91 +317,13 @@ with col2:
                 if combined_text.strip():
                     st.info(f"🔊 읽을 내용: {combined_text}")
                     
-                    # TTS 엔진 선택
-                    if st.session_state.tts_engine == "웹 TTS (온라인)":
-                        # 웹 TTS 사용 (Google Translate TTS)
-                        try:
-                            import requests
-                            import urllib.parse
-                            
-                            # Google Translate TTS API 사용
-                            text_encoded = urllib.parse.quote(combined_text)
-                            tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={text_encoded}&tl=ko&client=tw-ob"
-                            
-                            response = requests.get(tts_url)
-                            if response.status_code == 200:
-                                st.audio(response.content, format='audio/mpeg')
-                                st.success("웹 TTS로 음성을 재생했습니다.")
-                            else:
-                                st.error("웹 TTS 서비스에 접근할 수 없습니다.")
-                        except Exception as e:
-                            st.error(f"웹 TTS 실패: {str(e)}")
-                            st.info("브라우저 TTS로 자동 전환합니다...")
-                            
-                            # 웹 TTS 실패 시 브라우저 TTS로 폴백
-                            try:
-                                import pyttsx3
-                                engine = pyttsx3.init()
-                                engine.setProperty('rate', 200)
-                                engine.setProperty('volume', 1.0)
-                                engine.say(combined_text)
-                                engine.runAndWait()
-                                st.success("브라우저 TTS로 음성을 재생했습니다.")
-                            except Exception as e2:
-                                st.error(f"브라우저 TTS도 실패: {str(e2)}")
-                                st.info("텍스트를 복사하여 다른 TTS 도구를 사용하세요.")
-                    elif st.session_state.tts_engine == "Edge TTS (고품질)":
-                        # Edge TTS 시도
-                        try:
-                            rate = EDGE_RATE_MAP.get(st.session_state.speed, "+0%")
-                            selected_voice = st.session_state.selected_voice
-                            
-                            # Edge TTS로 음성 생성
-                            with st.spinner("음성을 생성하고 있습니다..."):
-                                temp_audio = os.path.join(tempfile.gettempdir(), f"tts_{uuid.uuid4().hex}.mp3")
-                                comm = edge_tts.Communicate(combined_text, voice=selected_voice, rate=rate)
-                                asyncio.run(comm.save(temp_audio))
-                                
-                                # 오디오 파일 재생
-                                with open(temp_audio, 'rb') as audio_file:
-                                    audio_bytes = audio_file.read()
-                                    st.audio(audio_bytes, format='audio/mp3')
-                                
-                                # 임시 파일 삭제
-                                try:
-                                    os.remove(temp_audio)
-                                except:
-                                    pass
-                                    
-                        except Exception as e:
-                            st.warning(f"Edge TTS 실패: {str(e)}")
-                            st.info("브라우저 TTS로 자동 전환합니다...")
-                            
-                            # Edge TTS 실패 시 브라우저 TTS로 폴백
-                            try:
-                                import pyttsx3
-                                engine = pyttsx3.init()
-                                engine.setProperty('rate', 200)
-                                engine.setProperty('volume', 1.0)
-                                engine.say(combined_text)
-                                engine.runAndWait()
-                                st.success("브라우저 TTS로 음성을 재생했습니다.")
-                            except Exception as e2:
-                                st.error(f"브라우저 TTS도 실패: {str(e2)}")
-                                st.info("텍스트를 복사하여 다른 TTS 도구를 사용하세요.")
-                    else:
-                        # 브라우저 TTS 사용
-                        try:
-                            import pyttsx3
-                            engine = pyttsx3.init()
-                            engine.setProperty('rate', 200)
-                            engine.setProperty('volume', 1.0)
-                            engine.say(combined_text)
-                            engine.runAndWait()
-                            st.success("브라우저 TTS로 음성을 재생했습니다.")
-                        except Exception as e:
-                            st.error(f"브라우저 TTS 실패: {str(e)}")
-                            st.info("텍스트를 복사하여 다른 TTS 도구를 사용하세요.")
+                    # TTS 실행
+                    with st.spinner("음성을 재생하고 있습니다..."):
+                        success = speak_text(combined_text)
+                        if success:
+                            st.success("✅ 음성 재생 완료!")
+                        else:
+                            st.error("❌ 음성 재생 실패")
                 else:
                     st.warning("읽을 내용이 없습니다.")
     
@@ -642,8 +413,6 @@ if st.session_state.file_data:
             st.session_state.current_row = st.session_state.file_data['max_row']
             st.rerun()
 
-
-
 # 자동 진행 처리
 if st.session_state.reading and auto_advance:
     if st.session_state.current_row < st.session_state.file_data['max_row']:
@@ -659,8 +428,21 @@ st.markdown("---")
 st.markdown("### 🎯 사용법")
 st.markdown("""
 1. **파일 업로드**: 엑셀 파일을 업로드하세요
-2. **설정 조정**: 사이드바에서 TTS 설정을 조정하세요
-3. **읽기 시작**: '시작' 버튼을 클릭하거나 '현재 행 읽기'를 사용하세요
+2. **설정 조정**: 사이드바에서 음성 속도를 조정하세요
+3. **읽기 시작**: '현재 행 읽기' 버튼을 클릭하세요
 4. **자동 진행**: 필요시 자동 진행을 활성화하세요
 5. **키보드 단축키**: 1(다음 행), 2(다시 읽기), 3(네이버 검색) 버튼을 사용하세요
 """)
+
+# 테스트 버튼
+st.markdown("### 🧪 음성 테스트")
+if st.button("🔊 음성 테스트", use_container_width=True):
+    test_text = "안녕하세요. 음성 테스트입니다."
+    st.info(f"테스트 텍스트: {test_text}")
+    
+    with st.spinner("음성을 재생하고 있습니다..."):
+        success = speak_text(test_text)
+        if success:
+            st.success("✅ 음성 테스트 성공!")
+        else:
+            st.error("❌ 음성 테스트 실패")
