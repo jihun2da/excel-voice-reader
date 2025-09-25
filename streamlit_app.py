@@ -98,8 +98,8 @@ with st.sidebar:
     # TTS 엔진 선택
     tts_engine = st.selectbox(
         "TTS 엔진",
-        ["Edge TTS (고품질)", "브라우저 TTS (빠름)"],
-        help="Edge TTS는 고품질이지만 느리고, 브라우저 TTS는 빠르지만 품질이 낮습니다.",
+        ["브라우저 TTS (권장)", "Edge TTS (고품질)", "웹 TTS (온라인)"],
+        help="브라우저 TTS가 가장 안정적입니다. Edge TTS는 서버 문제로 실패할 수 있습니다.",
         key="tts_engine_select"
     )
     st.session_state.tts_engine = tts_engine
@@ -109,6 +109,9 @@ with st.sidebar:
         voice_options = {voice['name']: voice['id'] for voice in EDGE_VOICES}
         selected_voice_name = st.selectbox("음성 선택", list(voice_options.keys()))
         st.session_state.selected_voice = voice_options[selected_voice_name]
+    elif tts_engine == "웹 TTS (온라인)":
+        st.session_state.selected_voice = None
+        st.info("웹 TTS는 온라인 서비스를 사용합니다.")
     else:
         st.session_state.selected_voice = None
         st.info("브라우저 TTS는 브라우저에서 제공하는 음성을 사용합니다.")
@@ -279,8 +282,41 @@ with col2:
             if combined_text.strip():
                 st.info(f"🔊 읽을 내용: {combined_text}")
                 
-                # Edge TTS 사용
-                if st.session_state.tts_engine == "Edge TTS (고품질)":
+                # TTS 엔진 선택
+                if st.session_state.tts_engine == "웹 TTS (온라인)":
+                    # 웹 TTS 사용 (Google Translate TTS)
+                    try:
+                        import requests
+                        import urllib.parse
+                        
+                        # Google Translate TTS API 사용
+                        text_encoded = urllib.parse.quote(combined_text)
+                        tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={text_encoded}&tl=ko&client=tw-ob"
+                        
+                        response = requests.get(tts_url)
+                        if response.status_code == 200:
+                            st.audio(response.content, format='audio/mpeg')
+                            st.success("웹 TTS로 음성을 재생했습니다.")
+                        else:
+                            st.error("웹 TTS 서비스에 접근할 수 없습니다.")
+                    except Exception as e:
+                        st.error(f"웹 TTS 실패: {str(e)}")
+                        st.info("브라우저 TTS로 자동 전환합니다...")
+                        
+                        # 웹 TTS 실패 시 브라우저 TTS로 폴백
+                        try:
+                            import pyttsx3
+                            engine = pyttsx3.init()
+                            engine.setProperty('rate', 200)
+                            engine.setProperty('volume', 1.0)
+                            engine.say(combined_text)
+                            engine.runAndWait()
+                            st.success("브라우저 TTS로 음성을 재생했습니다.")
+                        except Exception as e2:
+                            st.error(f"브라우저 TTS도 실패: {str(e2)}")
+                            st.info("텍스트를 복사하여 다른 TTS 도구를 사용하세요.")
+                elif st.session_state.tts_engine == "Edge TTS (고품질)":
+                    # Edge TTS 시도
                     try:
                         rate = EDGE_RATE_MAP.get(st.session_state.speed, "+0%")
                         selected_voice = st.session_state.selected_voice
@@ -303,7 +339,21 @@ with col2:
                                 pass
                                 
                     except Exception as e:
-                        st.error(f"TTS 생성 실패: {str(e)}")
+                        st.warning(f"Edge TTS 실패: {str(e)}")
+                        st.info("브라우저 TTS로 자동 전환합니다...")
+                        
+                        # Edge TTS 실패 시 브라우저 TTS로 폴백
+                        try:
+                            import pyttsx3
+                            engine = pyttsx3.init()
+                            engine.setProperty('rate', 200)
+                            engine.setProperty('volume', 1.0)
+                            engine.say(combined_text)
+                            engine.runAndWait()
+                            st.success("브라우저 TTS로 음성을 재생했습니다.")
+                        except Exception as e2:
+                            st.error(f"브라우저 TTS도 실패: {str(e2)}")
+                            st.info("텍스트를 복사하여 다른 TTS 도구를 사용하세요.")
                 else:
                     # 브라우저 TTS 사용
                     try:
@@ -316,6 +366,7 @@ with col2:
                         st.success("브라우저 TTS로 음성을 재생했습니다.")
                     except Exception as e:
                         st.error(f"브라우저 TTS 실패: {str(e)}")
+                        st.info("텍스트를 복사하여 다른 TTS 도구를 사용하세요.")
             else:
                 st.warning("읽을 내용이 없습니다.")
         else:
@@ -417,8 +468,41 @@ with col2:
                 if combined_text.strip():
                     st.info(f"🔊 읽을 내용: {combined_text}")
                     
-                    # Edge TTS 사용
-                    if st.session_state.tts_engine == "Edge TTS (고품질)":
+                    # TTS 엔진 선택
+                    if st.session_state.tts_engine == "웹 TTS (온라인)":
+                        # 웹 TTS 사용 (Google Translate TTS)
+                        try:
+                            import requests
+                            import urllib.parse
+                            
+                            # Google Translate TTS API 사용
+                            text_encoded = urllib.parse.quote(combined_text)
+                            tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={text_encoded}&tl=ko&client=tw-ob"
+                            
+                            response = requests.get(tts_url)
+                            if response.status_code == 200:
+                                st.audio(response.content, format='audio/mpeg')
+                                st.success("웹 TTS로 음성을 재생했습니다.")
+                            else:
+                                st.error("웹 TTS 서비스에 접근할 수 없습니다.")
+                        except Exception as e:
+                            st.error(f"웹 TTS 실패: {str(e)}")
+                            st.info("브라우저 TTS로 자동 전환합니다...")
+                            
+                            # 웹 TTS 실패 시 브라우저 TTS로 폴백
+                            try:
+                                import pyttsx3
+                                engine = pyttsx3.init()
+                                engine.setProperty('rate', 200)
+                                engine.setProperty('volume', 1.0)
+                                engine.say(combined_text)
+                                engine.runAndWait()
+                                st.success("브라우저 TTS로 음성을 재생했습니다.")
+                            except Exception as e2:
+                                st.error(f"브라우저 TTS도 실패: {str(e2)}")
+                                st.info("텍스트를 복사하여 다른 TTS 도구를 사용하세요.")
+                    elif st.session_state.tts_engine == "Edge TTS (고품질)":
+                        # Edge TTS 시도
                         try:
                             rate = EDGE_RATE_MAP.get(st.session_state.speed, "+0%")
                             selected_voice = st.session_state.selected_voice
@@ -441,7 +525,21 @@ with col2:
                                     pass
                                     
                         except Exception as e:
-                            st.error(f"TTS 생성 실패: {str(e)}")
+                            st.warning(f"Edge TTS 실패: {str(e)}")
+                            st.info("브라우저 TTS로 자동 전환합니다...")
+                            
+                            # Edge TTS 실패 시 브라우저 TTS로 폴백
+                            try:
+                                import pyttsx3
+                                engine = pyttsx3.init()
+                                engine.setProperty('rate', 200)
+                                engine.setProperty('volume', 1.0)
+                                engine.say(combined_text)
+                                engine.runAndWait()
+                                st.success("브라우저 TTS로 음성을 재생했습니다.")
+                            except Exception as e2:
+                                st.error(f"브라우저 TTS도 실패: {str(e2)}")
+                                st.info("텍스트를 복사하여 다른 TTS 도구를 사용하세요.")
                     else:
                         # 브라우저 TTS 사용
                         try:
@@ -454,6 +552,7 @@ with col2:
                             st.success("브라우저 TTS로 음성을 재생했습니다.")
                         except Exception as e:
                             st.error(f"브라우저 TTS 실패: {str(e)}")
+                            st.info("텍스트를 복사하여 다른 TTS 도구를 사용하세요.")
                 else:
                     st.warning("읽을 내용이 없습니다.")
     
