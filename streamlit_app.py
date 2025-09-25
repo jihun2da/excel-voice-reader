@@ -237,7 +237,87 @@ with col2:
     # 단일 행 읽기
     if st.button("🔊 현재 행 읽기", use_container_width=True):
         if st.session_state.file_data and st.session_state.current_row <= len(st.session_state.file_data['data']):
-            read_current_row()
+            # 현재 행 읽기 로직을 직접 구현
+            current_data = st.session_state.file_data['data'][st.session_state.current_row - 2]
+            
+            # 읽을 텍스트 구성
+            text_parts = []
+            
+            # G열 (브랜드/묶음) 처리
+            g_value = clean_g_value(current_data['g'])
+            if st.session_state.announce_group and g_value and g_value != st.session_state.prev_g_value:
+                # 연속된 G값 개수 계산 (간단화)
+                g_count = 1
+                for i in range(st.session_state.current_row, st.session_state.file_data['max_row'] + 1):
+                    if i < len(st.session_state.file_data['data']) + 1:
+                        next_data = st.session_state.file_data['data'][i - 2]
+                        next_g = clean_g_value(next_data['g'])
+                        if next_g == g_value:
+                            g_count += 1
+                        else:
+                            break
+                
+                if g_count > 1:
+                    text_parts.append(f"{g_value} {convert_quantity(g_count)}")
+                else:
+                    text_parts.append(g_value)
+            
+            st.session_state.prev_g_value = g_value
+            
+            # 상품명, 색상, 사이즈, 수량
+            if current_data['i']:
+                text_parts.append(current_data['i'])
+            if current_data['j']:
+                text_parts.append(current_data['j'])
+            if current_data['k']:
+                text_parts.append(convert_size(current_data['k']))
+            if current_data['l'] and isinstance(current_data['l'], (int, float)) and current_data['l'] >= 2:
+                text_parts.append(convert_quantity(int(current_data['l'])))
+            
+            combined_text = " ".join(text_parts)
+            
+            if combined_text.strip():
+                st.info(f"🔊 읽을 내용: {combined_text}")
+                
+                # Edge TTS 사용
+                if st.session_state.tts_engine == "Edge TTS (고품질)":
+                    try:
+                        rate = EDGE_RATE_MAP.get(st.session_state.speed, "+0%")
+                        selected_voice = st.session_state.selected_voice
+                        
+                        # Edge TTS로 음성 생성
+                        with st.spinner("음성을 생성하고 있습니다..."):
+                            temp_audio = os.path.join(tempfile.gettempdir(), f"tts_{uuid.uuid4().hex}.mp3")
+                            comm = edge_tts.Communicate(combined_text, voice=selected_voice, rate=rate)
+                            asyncio.run(comm.save(temp_audio))
+                            
+                            # 오디오 파일 재생
+                            with open(temp_audio, 'rb') as audio_file:
+                                audio_bytes = audio_file.read()
+                                st.audio(audio_bytes, format='audio/mp3')
+                            
+                            # 임시 파일 삭제
+                            try:
+                                os.remove(temp_audio)
+                            except:
+                                pass
+                                
+                    except Exception as e:
+                        st.error(f"TTS 생성 실패: {str(e)}")
+                else:
+                    # 브라우저 TTS 사용
+                    try:
+                        import pyttsx3
+                        engine = pyttsx3.init()
+                        engine.setProperty('rate', 200)
+                        engine.setProperty('volume', 1.0)
+                        engine.say(combined_text)
+                        engine.runAndWait()
+                        st.success("브라우저 TTS로 음성을 재생했습니다.")
+                    except Exception as e:
+                        st.error(f"브라우저 TTS 실패: {str(e)}")
+            else:
+                st.warning("읽을 내용이 없습니다.")
         else:
             st.warning("읽을 데이터가 없습니다.")
     
@@ -266,7 +346,15 @@ with col2:
             if h_value and i_value:
                 query = f"{h_value} {i_value}"
                 naver_url = f"https://search.naver.com/search.naver?query={query}"
-                st.markdown(f"[🔍 네이버에서 '{query}' 검색하기]({naver_url})")
+                
+                # JavaScript로 새창 열기
+                st.markdown(f"""
+                <script>
+                window.open('{naver_url}', '_blank');
+                </script>
+                """, unsafe_allow_html=True)
+                
+                st.success(f"🔍 '{query}' 검색을 새창에서 열었습니다.")
             else:
                 st.warning("검색할 내용이 없습니다.")
     
@@ -287,7 +375,87 @@ with col2:
     with col_kb2:
         if st.button("2️⃣ 다시 읽기", use_container_width=True, key="kb_2"):
             if st.session_state.file_data:
-                read_current_row()
+                # 현재 행 읽기 로직을 직접 구현
+                current_data = st.session_state.file_data['data'][st.session_state.current_row - 2]
+                
+                # 읽을 텍스트 구성
+                text_parts = []
+                
+                # G열 (브랜드/묶음) 처리
+                g_value = clean_g_value(current_data['g'])
+                if st.session_state.announce_group and g_value and g_value != st.session_state.prev_g_value:
+                    # 연속된 G값 개수 계산 (간단화)
+                    g_count = 1
+                    for i in range(st.session_state.current_row, st.session_state.file_data['max_row'] + 1):
+                        if i < len(st.session_state.file_data['data']) + 1:
+                            next_data = st.session_state.file_data['data'][i - 2]
+                            next_g = clean_g_value(next_data['g'])
+                            if next_g == g_value:
+                                g_count += 1
+                            else:
+                                break
+                    
+                    if g_count > 1:
+                        text_parts.append(f"{g_value} {convert_quantity(g_count)}")
+                    else:
+                        text_parts.append(g_value)
+                
+                st.session_state.prev_g_value = g_value
+                
+                # 상품명, 색상, 사이즈, 수량
+                if current_data['i']:
+                    text_parts.append(current_data['i'])
+                if current_data['j']:
+                    text_parts.append(current_data['j'])
+                if current_data['k']:
+                    text_parts.append(convert_size(current_data['k']))
+                if current_data['l'] and isinstance(current_data['l'], (int, float)) and current_data['l'] >= 2:
+                    text_parts.append(convert_quantity(int(current_data['l'])))
+                
+                combined_text = " ".join(text_parts)
+                
+                if combined_text.strip():
+                    st.info(f"🔊 읽을 내용: {combined_text}")
+                    
+                    # Edge TTS 사용
+                    if st.session_state.tts_engine == "Edge TTS (고품질)":
+                        try:
+                            rate = EDGE_RATE_MAP.get(st.session_state.speed, "+0%")
+                            selected_voice = st.session_state.selected_voice
+                            
+                            # Edge TTS로 음성 생성
+                            with st.spinner("음성을 생성하고 있습니다..."):
+                                temp_audio = os.path.join(tempfile.gettempdir(), f"tts_{uuid.uuid4().hex}.mp3")
+                                comm = edge_tts.Communicate(combined_text, voice=selected_voice, rate=rate)
+                                asyncio.run(comm.save(temp_audio))
+                                
+                                # 오디오 파일 재생
+                                with open(temp_audio, 'rb') as audio_file:
+                                    audio_bytes = audio_file.read()
+                                    st.audio(audio_bytes, format='audio/mp3')
+                                
+                                # 임시 파일 삭제
+                                try:
+                                    os.remove(temp_audio)
+                                except:
+                                    pass
+                                    
+                        except Exception as e:
+                            st.error(f"TTS 생성 실패: {str(e)}")
+                    else:
+                        # 브라우저 TTS 사용
+                        try:
+                            import pyttsx3
+                            engine = pyttsx3.init()
+                            engine.setProperty('rate', 200)
+                            engine.setProperty('volume', 1.0)
+                            engine.say(combined_text)
+                            engine.runAndWait()
+                            st.success("브라우저 TTS로 음성을 재생했습니다.")
+                        except Exception as e:
+                            st.error(f"브라우저 TTS 실패: {str(e)}")
+                else:
+                    st.warning("읽을 내용이 없습니다.")
     
     with col_kb3:
         if st.button("3️⃣ 네이버 검색", use_container_width=True, key="kb_3"):
@@ -299,7 +467,15 @@ with col2:
                 if h_value and i_value:
                     query = f"{h_value} {i_value}"
                     naver_url = f"https://search.naver.com/search.naver?query={query}"
-                    st.markdown(f"[🔍 네이버에서 '{query}' 검색하기]({naver_url})")
+                    
+                    # JavaScript로 새창 열기
+                    st.markdown(f"""
+                    <script>
+                    window.open('{naver_url}', '_blank');
+                    </script>
+                    """, unsafe_allow_html=True)
+                    
+                    st.success(f"🔍 '{query}' 검색을 새창에서 열었습니다.")
                 else:
                     st.warning("검색할 내용이 없습니다.")
 
@@ -368,97 +544,12 @@ if st.session_state.file_data:
             st.rerun()
 
 
-# 현재 행 읽기 함수
-def read_current_row():
-    if not st.session_state.file_data:
-        return
-    
-    current_data = st.session_state.file_data['data'][st.session_state.current_row - 2]
-    
-    # 읽을 텍스트 구성
-    text_parts = []
-    
-    # G열 (브랜드/묶음) 처리
-    g_value = clean_g_value(current_data['g'])
-    if st.session_state.announce_group and g_value and g_value != st.session_state.prev_g_value:
-        # 연속된 G값 개수 계산 (간단화)
-        g_count = 1
-        for i in range(st.session_state.current_row, st.session_state.file_data['max_row'] + 1):
-            if i < len(st.session_state.file_data['data']) + 1:
-                next_data = st.session_state.file_data['data'][i - 2]
-                next_g = clean_g_value(next_data['g'])
-                if next_g == g_value:
-                    g_count += 1
-                else:
-                    break
-        
-        if g_count > 1:
-            text_parts.append(f"{g_value} {convert_quantity(g_count)}")
-        else:
-            text_parts.append(g_value)
-    
-    st.session_state.prev_g_value = g_value
-    
-    # 상품명, 색상, 사이즈, 수량
-    if current_data['i']:
-        text_parts.append(current_data['i'])
-    if current_data['j']:
-        text_parts.append(current_data['j'])
-    if current_data['k']:
-        text_parts.append(convert_size(current_data['k']))
-    if current_data['l'] and isinstance(current_data['l'], (int, float)) and current_data['l'] >= 2:
-        text_parts.append(convert_quantity(int(current_data['l'])))
-    
-    combined_text = " ".join(text_parts)
-    
-    if combined_text.strip():
-        st.info(f"🔊 읽을 내용: {combined_text}")
-        
-        # Edge TTS 사용
-        if st.session_state.tts_engine == "Edge TTS (고품질)":
-            try:
-                rate = EDGE_RATE_MAP.get(st.session_state.speed, "+0%")
-                selected_voice = st.session_state.selected_voice
-                
-                # Edge TTS로 음성 생성
-                with st.spinner("음성을 생성하고 있습니다..."):
-                    temp_audio = os.path.join(tempfile.gettempdir(), f"tts_{uuid.uuid4().hex}.mp3")
-                    comm = edge_tts.Communicate(combined_text, voice=selected_voice, rate=rate)
-                    asyncio.run(comm.save(temp_audio))
-                    
-                    # 오디오 파일 재생
-                    with open(temp_audio, 'rb') as audio_file:
-                        audio_bytes = audio_file.read()
-                        st.audio(audio_bytes, format='audio/mp3')
-                    
-                    # 임시 파일 삭제
-                    try:
-                        os.remove(temp_audio)
-                    except:
-                        pass
-                        
-            except Exception as e:
-                st.error(f"TTS 생성 실패: {str(e)}")
-        else:
-            # 브라우저 TTS 사용
-            try:
-                import pyttsx3
-                engine = pyttsx3.init()
-                engine.setProperty('rate', 200)
-                engine.setProperty('volume', 1.0)
-                engine.say(combined_text)
-                engine.runAndWait()
-                st.success("브라우저 TTS로 음성을 재생했습니다.")
-            except Exception as e:
-                st.error(f"브라우저 TTS 실패: {str(e)}")
-    else:
-        st.warning("읽을 내용이 없습니다.")
 
 # 자동 진행 처리
 if st.session_state.reading and auto_advance:
     if st.session_state.current_row < st.session_state.file_data['max_row']:
         st.session_state.current_row += 1
-        read_current_row()
+        # 자동 진행 시에는 음성 재생하지 않고 행만 이동
         st.rerun()
     else:
         st.session_state.reading = False
